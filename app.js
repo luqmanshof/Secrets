@@ -12,6 +12,7 @@ const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require("passport-facebook").Strategy;
 const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
@@ -39,7 +40,8 @@ mongoose.set("useCreateIndex", true);
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    facebookId: String
 });
 
 userSchema.plugin(passportLocalMongoose);   // Setup user schema to use passportLocalMongoose as plugin
@@ -72,6 +74,19 @@ passport.use(new GoogleStrategy({
         console.log(profile);
 
         User.findOrCreate({ googleId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
+));
+
+passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_ID,
+    clientSecret: process.env.FACEBOOK_SECRET,
+    callbackURL: "http://localhost:3000/auth/facebook/secrets"
+},
+    function (accessToken, refreshToken, profile, cb) {
+        console.log(profile);
+        User.findOrCreate({ facebookId: profile.id }, function (err, user) {
             return cb(err, user);
         });
     }
@@ -114,6 +129,17 @@ app.get("/auth/google/secrets",
         res.redirect('/secrets');
     });
 
+app.get("/auth/facebook",
+    passport.authenticate('facebook'));
+
+app.get("/auth/facebook/secrets",
+    passport.authenticate('facebook', { failureRedirect: '/login' }),
+    function (req, res) {
+        // Successful authentication, redirect home.
+        res.redirect("/secrets");
+    });
+
+
 app.post("/register", function (req, res) {
     User.register({ username: req.body.username }, req.body.password, function (err, user) {
         if (err) {
@@ -126,6 +152,8 @@ app.post("/register", function (req, res) {
         }
     });
 });
+
+
 
 app.post("/login", function (req, res) {
     const user = new User({
